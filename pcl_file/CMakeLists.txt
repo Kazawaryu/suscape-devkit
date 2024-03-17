@@ -15,3 +15,7 @@ link_directories(/usr/local/lib)
 
 add_executable (sus_vis suscape_visualize.cpp)
 target_link_libraries (sus_vis ${PCL_LIBRARIES} jsoncpp)
+
+# 同时编译为动态库
+add_library(sus_vis_lib SHARED suscape_visualize.cpp)
+target_link_libraries (sus_vis_lib ${PCL_LIBRARIES} jsoncpp)

@@ -1,3 +1,4 @@
 /home/newDisk/SUSCape/suscape-devkit/pcl_file/CMakeFiles/rebuild_cache.dir
 /home/newDisk/SUSCape/suscape-devkit/pcl_file/CMakeFiles/edit_cache.dir
+/home/newDisk/SUSCape/suscape-devkit/pcl_file/CMakeFiles/sus_vis_lib.dir
 /home/newDisk/SUSCape/suscape-devkit/pcl_file/CMakeFiles/sus_vis.dir

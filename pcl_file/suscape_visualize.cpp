@@ -14,7 +14,6 @@
 
 using namespace std;
 
-// Forward declaration of getAlphaCount
 int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud);
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr loadPointCloud(const string& binFile) {
@@ -26,10 +25,8 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr loadPointCloud(const string& binFile) {
     return cloud;
 }
 
-// 从json文件中读取标注框信息，并对子项逐个打印，格式不是KITTI
+
 vector<Json::Value> readLabel(const string& labelFile) {
-    
-    // 读取json文件
     Json::Reader reader;
     Json::Value root;
     ifstream file(labelFile, ifstream::binary);
@@ -37,7 +34,6 @@ vector<Json::Value> readLabel(const string& labelFile) {
         cerr << "Failed to parse " << labelFile << endl;
         exit(EXIT_FAILURE);
     }
-    // json结构如下：
     //{frame,objs:[{obj_id,obj_type,psr:{position:{x,y,z},rotation:{x,y,z},scale:{x,y,z}}},{obj_id,...},...]}
     vector<Json::Value> objs;
     for (int i = 0; i < root["objs"].size(); i++) {
@@ -47,10 +43,9 @@ vector<Json::Value> readLabel(const string& labelFile) {
     return objs;
 }
 
-// 读取calib文件，获取标定参数
+
 vector<Json::Value> readCalib(const string& calibFile) {
     vector<Json::Value> calib;
-    // 读取json文件
     Json::Reader reader;
     Json::Value root;
     ifstream file(calibFile, ifstream::binary);
@@ -58,13 +53,12 @@ vector<Json::Value> readCalib(const string& calibFile) {
         cerr << "Failed to parse " << calibFile << endl;
         exit(EXIT_FAILURE);
     }
-    // 逐个打印子项，并储存到vector中
+
     calib.push_back(root);
 
     return calib;
 }
 
-// 根据visualizeBoundingBox方法，生成一个方法以得到标注框的8个顶点坐标，返回值为vector<pcl::PointXYZ>
 vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
     vector<vector<pcl::PointXYZ>> boundingBoxs;
     for (int i = 0; i < objs.size(); i++) {
@@ -78,8 +72,7 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
         float scale_y = objs[i]["psr"]["scale"]["y"].asFloat();
         float scale_z = objs[i]["psr"]["scale"]["z"].asFloat();
         float rotation = sqrt(rotation_x * rotation_x + rotation_y * rotation_y + rotation_z * rotation_z);
-        // 获取8个顶点坐标
-        
+    
         float x1 = x - scale_x / 2;
         float y1 = y - scale_y / 2;
         float z1 = z - scale_z / 2;
@@ -105,7 +98,6 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
         float y8 = y + scale_y / 2;
         float z8 = z + scale_z / 2;
 
-        // 乘旋转矩阵进行变换，旋转中心为标注框中心
         float x_center = (x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8) / 8;
         float y_center = (y1 + y2 + y3 + y4 + y5 + y6 + y7 + y8) / 8;
         float temp_x1 = (x1 - x_center) * cos(rotation) - (y1 - y_center) * sin(rotation) + x_center;
@@ -140,7 +132,6 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
     return boundingBoxs;
 }
 
-// Use cropbox (with rotation) to get the inner points of the bounding box, return a vector of sub point clouds
 vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs) {
     vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints;
     pcl::CropBox<pcl::PointXYZI> cropBoxFilter;
@@ -155,7 +146,6 @@ vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl:
         float scale_y = objs[i]["psr"]["scale"]["y"].asFloat();
         float scale_z = objs[i]["psr"]["scale"]["z"].asFloat();
         float rotation = sqrt(rotation_x * rotation_x + rotation_y * rotation_y + rotation_z * rotation_z);
-        // 获取8个顶点坐标
         float x1 = x - scale_x / 2;
         float y1 = y - scale_y / 2;
         float z1 = z - scale_z / 2;
@@ -181,7 +171,6 @@ vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl:
         float y8 = y + scale_y / 2;
         float z8 = z + scale_z / 2;
 
-        // 乘旋转矩阵进行变换，旋转中心为标注框中心
         float x_center = (x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8) / 8;
         float y_center = (y1 + y2 + y3 + y4 + y5 + y6 + y7 + y8) / 8;
         float temp_x1 = (x1 - x_center) * cos(rotation) - (y1 - y_center) * sin(rotation) + x_center;
@@ -217,15 +206,12 @@ vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl:
         innerPoints.push_back(innerCloud);
 
         int count = getAlphaCount(innerCloud);
-        // 计算目标到采集者的距离
         float distance = sqrt(x * x + y * y + z * z);
-        // 格式化打印（每个元素限定占位）：目标的id，目标的类型，目标到采集者的距离，目标的alpha面个数
         cout << "obj_id: " << objs[i]["obj_id"].asString() << ", obj_type: " << objs[i]["obj_type"].asString() << ", distance: " << distance << ", alpha_count: " << count << endl;
     }
     return innerPoints;
 }
 
-// 计算标注框内的点云的alpha面的个数，alpha=1.5，使用ConcaveHull类中的算法
 int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud) {
     pcl::ConcaveHull<pcl::PointXYZI> concaveHull;
     concaveHull.setInputCloud(obj_cloud);
@@ -235,17 +221,14 @@ int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud) {
 
     return hull.points.size();
 }
-    
-// 可视化标注框
+
 void visualizeWithBbox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs, vector<Json::Value> calib) {
-    // 创建PCL可视化对象
     pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
     pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> fildColor(cloud, "z");
     viewer->setBackgroundColor(0, 0, 0);
     viewer->addPointCloud<pcl::PointXYZI>(cloud, fildColor, "sample cloud");
     vector<vector<pcl::PointXYZ>> boundingBoxs = getBoundingBoxs(objs);
 
-    // 逐个标注框进行可视化
     for (int i = 0; i < boundingBoxs.size(); i++) {
         viewer->addLine(pcl::PointXYZ(boundingBoxs[i][0].x, boundingBoxs[i][0].y, boundingBoxs[i][0].z), pcl::PointXYZ(boundingBoxs[i][1].x, boundingBoxs[i][1].y, boundingBoxs[i][1].z), 1.0, 0.0, 0.0, "line1"+to_string(i));
         viewer->addLine(pcl::PointXYZ(boundingBoxs[i][1].x, boundingBoxs[i][1].y, boundingBoxs[i][1].z), pcl::PointXYZ(boundingBoxs[i][2].x, boundingBoxs[i][2].y, boundingBoxs[i][2].z), 1.0, 0.0, 0.0, "line2"+to_string(i));
@@ -267,7 +250,6 @@ void visualizeWithBbox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::
     return;
 }
 
-// 可是化标注框内的点云
 void visualizeInnerPoints(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints) {
     pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
     for (int i = 0; i < innerPoints.size(); i++) {
@@ -282,8 +264,32 @@ void visualizeInnerPoints(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoin
     return;
 }
 
+extern "C"{
+    void callsByPython(string file_index, string visWhat){
+        string binFile = "/home/newDisk/SUSCape/dataset/lidar/scene-000000/lidar/" + file_index + ".pcd";
+        string labelFile = "/home/newDisk/SUSCape/dataset/label/scene-000000/label/" + file_index + ".json";
+        string calibFile = "/home/newDisk/SUSCape/dataset/calib/scene-000000/calib/aux_lidar/front.json";
 
-int main(int argc, char **argv)
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud = loadPointCloud(binFile);
+        cout << "Loaded " << cloud->points.size() << " points" << endl;
+
+        vector<Json::Value> objs = readLabel(labelFile);
+        vector<Json::Value> calib = readCalib(calibFile);
+
+        vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs);
+        
+        if (visWhat == "bbox") {
+            visualizeWithBbox(cloud, objs, calib);
+        } else if (visWhat == "inner") {
+            visualizeInnerPoints(innerPoints);
+        } else {
+            cout << "Not do visualization" << endl;
+        }
+    }
+}
+
+
+int main(int argc, char *argv[])
 {
     if (argc != 3) {
         cerr << "Usage: " << argv[0] << " <file_index> <visWhat>" << endl;
@@ -301,7 +307,6 @@ int main(int argc, char **argv)
     vector<Json::Value> objs = readLabel(labelFile);
     vector<Json::Value> calib = readCalib(calibFile);
 
-    // 可视化标注框内的点云
     vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs);
     
     if (visWhat == "bbox") {
