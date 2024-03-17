@@ -6,5 +6,5 @@ CXX_DEFINES = -DDISABLE_LIBUSB_1_0 -DDISABLE_PCAP -DDISABLE_PNG -Dqh_QHpointer -
 
 CXX_INCLUDES = -isystem /usr/include/vtk-7.1 -isystem /usr/include/freetype2 -isystem /usr/include/pcl-1.10 -isystem /usr/include/eigen3 -isystem /usr/include/ni -isystem /usr/include/openni2
 
-CXX_FLAGS = -std=gnu++14
+CXX_FLAGS =  -O3  -std=gnu++14
 

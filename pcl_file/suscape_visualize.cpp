@@ -14,6 +14,9 @@
 
 using namespace std;
 
+extern "C" float* callsByPython(const char* file_index, const char* visWhat);
+extern "C" int getArrayLength();
+
 int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud);
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr loadPointCloud(const string& binFile) {
@@ -132,7 +135,7 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
     return boundingBoxs;
 }
 
-vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs) {
+vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs, vector<vector<float>> &result) {
     vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints;
     pcl::CropBox<pcl::PointXYZI> cropBoxFilter;
     for (int i = 0; i < objs.size(); i++) {
@@ -207,7 +210,13 @@ vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl:
 
         int count = getAlphaCount(innerCloud);
         float distance = sqrt(x * x + y * y + z * z);
-        cout << "obj_id: " << objs[i]["obj_id"].asString() << ", obj_type: " << objs[i]["obj_type"].asString() << ", distance: " << distance << ", alpha_count: " << count << endl;
+        vector<float> temp;
+        // objs[i]["obj_id"]强行转换为float类型
+        float idx_ = std::stof(objs[i]["obj_id"].asString());
+        temp.push_back(idx_);
+        temp.push_back(distance);
+        temp.push_back(count);
+        result.push_back(temp);
     }
     return innerPoints;
 }
@@ -264,29 +273,39 @@ void visualizeInnerPoints(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoin
     return;
 }
 
-extern "C"{
-    void callsByPython(string file_index, string visWhat){
-        string binFile = "/home/newDisk/SUSCape/dataset/lidar/scene-000000/lidar/" + file_index + ".pcd";
-        string labelFile = "/home/newDisk/SUSCape/dataset/label/scene-000000/label/" + file_index + ".json";
-        string calibFile = "/home/newDisk/SUSCape/dataset/calib/scene-000000/calib/aux_lidar/front.json";
+float* callsByPython(const char* file_index, const char* visWhat){
+    string binFile = "/home/newDisk/SUSCape/dataset/lidar/scene-000000/lidar/" + string(file_index) + ".pcd";
+    string labelFile = "/home/newDisk/SUSCape/dataset/label/scene-000000/label/" + string(file_index) + ".json";
+    string calibFile = "/home/newDisk/SUSCape/dataset/calib/scene-000000/calib/aux_lidar/front.json";
 
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud = loadPointCloud(binFile);
-        cout << "Loaded " << cloud->points.size() << " points" << endl;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud = loadPointCloud(binFile);
 
-        vector<Json::Value> objs = readLabel(labelFile);
-        vector<Json::Value> calib = readCalib(calibFile);
+    vector<Json::Value> objs = readLabel(labelFile);
+    vector<Json::Value> calib = readCalib(calibFile);
 
-        vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs);
-        
-        if (visWhat == "bbox") {
-            visualizeWithBbox(cloud, objs, calib);
-        } else if (visWhat == "inner") {
-            visualizeInnerPoints(innerPoints);
-        } else {
-            cout << "Not do visualization" << endl;
-        }
+    vector<vector<float>> result;
+
+    vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs, result);
+
+    // 将result转换为数组
+    float* result_array = new float[result.size() * 3 + 1];
+    result_array[0] = result.size() * 3;
+    for (int i = 0; i < result.size(); i++) {
+        result_array[i * 3 + 1] = result[i][0];
+        result_array[i * 3 + 2] = result[i][1];
+        result_array[i * 3 + 3] = result[i][2];
     }
+    
+    if (string(visWhat) == "bbox") {
+        visualizeWithBbox(cloud, objs, calib);
+    } else if (string(visWhat) == "inner") {
+        visualizeInnerPoints(innerPoints);
+    }
+
+    return result_array;
 }
+
+
 
 
 int main(int argc, char *argv[])
@@ -302,19 +321,22 @@ int main(int argc, char *argv[])
     string calibFile = "/home/newDisk/SUSCape/dataset/calib/scene-000000/calib/aux_lidar/front.json";
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud = loadPointCloud(binFile);
-    cout << "Loaded " << cloud->points.size() << " points" << endl;
 
     vector<Json::Value> objs = readLabel(labelFile);
     vector<Json::Value> calib = readCalib(calibFile);
+    vector<vector<float>> result;
 
-    vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs);
+    vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs, result);
+
+    // 打印结果
+    for (int i = 0; i < result.size(); i++) {
+        cout << "obj_id: " << result[i][0] << " distance: " << result[i][1] << " count: " << result[i][2] << endl;
+    }
     
     if (visWhat == "bbox") {
         visualizeWithBbox(cloud, objs, calib);
     } else if (visWhat == "inner") {
         visualizeInnerPoints(innerPoints);
-    } else {
-        cout << "Not do visualization" << endl;
     }
 
     return 0;
