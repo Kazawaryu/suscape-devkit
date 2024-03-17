@@ -1,5 +1,6 @@
 file(REMOVE_RECURSE
   "CMakeFiles/sus_vis.dir/suscape_visualize.cpp.o"
+  "CMakeFiles/sus_vis.dir/suscape_visualize.cpp.o.d"
   "sus_vis"
   "sus_vis.pdb"
 )

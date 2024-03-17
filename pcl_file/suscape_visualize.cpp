@@ -10,8 +10,12 @@
 #include <string>
 #include <cmath>
 #include <jsoncpp/json/json.h>
+#include <pcl/surface/concave_hull.h>
 
 using namespace std;
+
+// Forward declaration of getAlphaCount
+int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud);
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr loadPointCloud(const string& binFile) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
@@ -37,11 +41,6 @@ vector<Json::Value> readLabel(const string& labelFile) {
     //{frame,objs:[{obj_id,obj_type,psr:{position:{x,y,z},rotation:{x,y,z},scale:{x,y,z}}},{obj_id,...},...]}
     vector<Json::Value> objs;
     for (int i = 0; i < root["objs"].size(); i++) {
-        cout << "obj_id: " << root["objs"][i]["obj_id"].asString() << endl;
-        cout << "obj_type: " << root["objs"][i]["obj_type"].asString() << endl;
-        cout << "position: " << root["objs"][i]["psr"]["position"]["x"].asFloat() << " " << root["objs"][i]["psr"]["position"]["y"].asFloat() << " " << root["objs"][i]["psr"]["position"]["z"].asFloat() << endl;
-        cout << "rotation: " << root["objs"][i]["psr"]["rotation"]["x"].asFloat() << " " << root["objs"][i]["psr"]["rotation"]["y"].asFloat() << " " << root["objs"][i]["psr"]["rotation"]["z"].asFloat() << endl;
-        cout << "scale: " << root["objs"][i]["psr"]["scale"]["x"].asFloat() << " " << root["objs"][i]["psr"]["scale"]["y"].asFloat() << " " << root["objs"][i]["psr"]["scale"]["z"].asFloat() << endl;
         objs.push_back(root["objs"][i]);
     }
 
@@ -60,10 +59,6 @@ vector<Json::Value> readCalib(const string& calibFile) {
         exit(EXIT_FAILURE);
     }
     // 逐个打印子项，并储存到vector中
-    cout << "rotation: " << root["rotation"][0].asFloat() << " " << root["rotation"][1].asFloat() << " " << root["rotation"][2].asFloat() << endl;
-    cout << "translation: " << root["translation"][0].asFloat() << " " << root["translation"][1].asFloat() << " " << root["translation"][2].asFloat() << endl;
-    cout << "color: " << root["color"][0].asFloat() << " " << root["color"][1].asFloat() << " " << root["color"][2].asFloat() << endl;
-    cout << "disable: " << root["disable"].asBool() << endl;
     calib.push_back(root);
 
     return calib;
@@ -84,6 +79,7 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
         float scale_z = objs[i]["psr"]["scale"]["z"].asFloat();
         float rotation = sqrt(rotation_x * rotation_x + rotation_y * rotation_y + rotation_z * rotation_z);
         // 获取8个顶点坐标
+        
         float x1 = x - scale_x / 2;
         float y1 = y - scale_y / 2;
         float z1 = z - scale_z / 2;
@@ -144,17 +140,10 @@ vector<vector<pcl::PointXYZ>> getBoundingBoxs(vector<Json::Value> objs) {
     return boundingBoxs;
 }
 
-// 可视化标注框
-void visualizeBoundingBox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs, vector<Json::Value> calib) {
-    // 创建PCL可视化对象
-    pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
-    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> fildColor(cloud, "z");
-    // 设置背景颜色，主色调为蓝色
-
-    viewer->setBackgroundColor(0, 0, 0);
-    viewer->addPointCloud<pcl::PointXYZI>(cloud, fildColor, "sample cloud");
-
-    // 逐个标注框进行可视化
+// Use cropbox (with rotation) to get the inner points of the bounding box, return a vector of sub point clouds
+vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs) {
+    vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints;
+    pcl::CropBox<pcl::PointXYZI> cropBoxFilter;
     for (int i = 0; i < objs.size(); i++) {
         float x = objs[i]["psr"]["position"]["x"].asFloat();
         float y = objs[i]["psr"]["position"]["y"].asFloat();
@@ -166,11 +155,6 @@ void visualizeBoundingBox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Jso
         float scale_y = objs[i]["psr"]["scale"]["y"].asFloat();
         float scale_z = objs[i]["psr"]["scale"]["z"].asFloat();
         float rotation = sqrt(rotation_x * rotation_x + rotation_y * rotation_y + rotation_z * rotation_z);
-        float color_r = calib[0]["color"][0].asFloat();
-        float color_g = calib[0]["color"][1].asFloat();
-        float color_b = calib[0]["color"][2].asFloat();
-        float disable = calib[0]["disable"].asBool();
-        
         // 获取8个顶点坐标
         float x1 = x - scale_x / 2;
         float y1 = y - scale_y / 2;
@@ -203,78 +187,110 @@ void visualizeBoundingBox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Jso
         float temp_x1 = (x1 - x_center) * cos(rotation) - (y1 - y_center) * sin(rotation) + x_center;
         float temp_y1 = (x1 - x_center) * sin(rotation) + (y1 - y_center) * cos(rotation) + y_center;
         float temp_x2 = (x2 - x_center) * cos(rotation) - (y2 - y_center) * sin(rotation) + x_center;
-
         float temp_y2 = (x2 - x_center) * sin(rotation) + (y2 - y_center) * cos(rotation) + y_center;
         float temp_x3 = (x3 - x_center) * cos(rotation) - (y3 - y_center) * sin(rotation) + x_center;
         float temp_y3 = (x3 - x_center) * sin(rotation) + (y3 - y_center) * cos(rotation) + y_center;
         float temp_x4 = (x4 - x_center) * cos(rotation) - (y4 - y_center) * sin(rotation) + x_center;
         float temp_y4 = (x4 - x_center) * sin(rotation) + (y4 - y_center) * cos(rotation) + y_center;
-
         float temp_x5 = (x5 - x_center) * cos(rotation) - (y5 - y_center) * sin(rotation) + x_center;
         float temp_y5 = (x5 - x_center) * sin(rotation) + (y5 - y_center) * cos(rotation) + y_center;
         float temp_x6 = (x6 - x_center) * cos(rotation) - (y6 - y_center) * sin(rotation) + x_center;
         float temp_y6 = (x6 - x_center) * sin(rotation) + (y6 - y_center) * cos(rotation) + y_center;
-
         float temp_x7 = (x7 - x_center) * cos(rotation) - (y7 - y_center) * sin(rotation) + x_center;
         float temp_y7 = (x7 - x_center) * sin(rotation) + (y7 - y_center) * cos(rotation) + y_center;
         float temp_x8 = (x8 - x_center) * cos(rotation) - (y8 - y_center) * sin(rotation) + x_center;
         float temp_y8 = (x8 - x_center) * sin(rotation) + (y8 - y_center) * cos(rotation) + y_center;
 
-        x1 = temp_x1;
-        y1 = temp_y1;
-        x2 = temp_x2;
-        y2 = temp_y2;
-        x3 = temp_x3;
-        y3 = temp_y3;
-        x4 = temp_x4;
-        y4 = temp_y4;
-        x5 = temp_x5;
-        y5 = temp_y5;
-        x6 = temp_x6;
-        y6 = temp_y6;
-        x7 = temp_x7;
-        y7 = temp_y7;
-        x8 = temp_x8;
-        y8 = temp_y8;
 
-        viewer->addLine(pcl::PointXYZ(x1, y1, z1), pcl::PointXYZ(x2, y2, z2), color_r, color_g, color_b, "line1"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x2, y2, z2), pcl::PointXYZ(x3, y3, z3), color_r, color_g, color_b, "line2"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x3, y3, z3), pcl::PointXYZ(x4, y4, z4), color_r, color_g, color_b, "line3"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x4, y4, z4), pcl::PointXYZ(x1, y1, z1), color_r, color_g, color_b, "line4"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x5, y5, z5), pcl::PointXYZ(x6, y6, z6), color_r, color_g, color_b, "line5"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x6, y6, z6), pcl::PointXYZ(x7, y7, z7), color_r, color_g, color_b, "line6"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x7, y7, z7), pcl::PointXYZ(x8, y8, z8), color_r, color_g, color_b, "line7"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x8, y8, z8), pcl::PointXYZ(x5, y5, z5), color_r, color_g, color_b, "line8"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x1, y1, z1), pcl::PointXYZ(x5, y5, z5), color_r, color_g, color_b, "line9"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x2, y2, z2), pcl::PointXYZ(x6, y6, z6), color_r, color_g, color_b, "linea"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x3, y3, z3), pcl::PointXYZ(x7, y7, z7), color_r, color_g, color_b, "lineb"+to_string(i));
-        viewer->addLine(pcl::PointXYZ(x4, y4, z4), pcl::PointXYZ(x8, y8, z8), color_r, color_g, color_b, "linec"+to_string(i));
+        pcl::PointCloud<pcl::PointXYZI>::Ptr innerCloud(new pcl::PointCloud<pcl::PointXYZI>);
+        cropBoxFilter.setInputCloud(cloud);
+        Eigen::Vector4f minPoint, maxPoint;
+        minPoint[0] = min(temp_x1, min(temp_x2, min(temp_x3, temp_x4)));
+        minPoint[1] = min(temp_y1, min(temp_y2, min(temp_y3, temp_y4)));
+        minPoint[2] = min(z1, min(z2, min(z3, z4)));
+        maxPoint[0] = max(temp_x5, max(temp_x6, max(temp_x7, temp_x8)));
+        maxPoint[1] = max(temp_y5, max(temp_y6, max(temp_y7, temp_y8)));
+        maxPoint[2] = max(z5, max(z6, max(z7, z8)));
+        cropBoxFilter.setMin(minPoint);
+        cropBoxFilter.setMax(maxPoint);
+        cropBoxFilter.filter(*innerCloud);
+        innerPoints.push_back(innerCloud);
+
+        int count = getAlphaCount(innerCloud);
+        // 计算目标到采集者的距离
+        float distance = sqrt(x * x + y * y + z * z);
+        // 格式化打印（每个元素限定占位）：目标的id，目标的类型，目标到采集者的距离，目标的alpha面个数
+        cout << "obj_id: " << objs[i]["obj_id"].asString() << ", obj_type: " << objs[i]["obj_type"].asString() << ", distance: " << distance << ", alpha_count: " << count << endl;
+    }
+    return innerPoints;
+}
+
+// 计算标注框内的点云的alpha面的个数，alpha=1.5，使用ConcaveHull类中的算法
+int getAlphaCount(pcl::PointCloud<pcl::PointXYZI>::Ptr obj_cloud) {
+    pcl::ConcaveHull<pcl::PointXYZI> concaveHull;
+    concaveHull.setInputCloud(obj_cloud);
+    concaveHull.setAlpha(1.5);
+    pcl::PointCloud<pcl::PointXYZI> hull;
+    concaveHull.reconstruct(hull);
+
+    return hull.points.size();
+}
+    
+// 可视化标注框
+void visualizeWithBbox(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, vector<Json::Value> objs, vector<Json::Value> calib) {
+    // 创建PCL可视化对象
+    pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> fildColor(cloud, "z");
+    viewer->setBackgroundColor(0, 0, 0);
+    viewer->addPointCloud<pcl::PointXYZI>(cloud, fildColor, "sample cloud");
+    vector<vector<pcl::PointXYZ>> boundingBoxs = getBoundingBoxs(objs);
+
+    // 逐个标注框进行可视化
+    for (int i = 0; i < boundingBoxs.size(); i++) {
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][0].x, boundingBoxs[i][0].y, boundingBoxs[i][0].z), pcl::PointXYZ(boundingBoxs[i][1].x, boundingBoxs[i][1].y, boundingBoxs[i][1].z), 1.0, 0.0, 0.0, "line1"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][1].x, boundingBoxs[i][1].y, boundingBoxs[i][1].z), pcl::PointXYZ(boundingBoxs[i][2].x, boundingBoxs[i][2].y, boundingBoxs[i][2].z), 1.0, 0.0, 0.0, "line2"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][2].x, boundingBoxs[i][2].y, boundingBoxs[i][2].z), pcl::PointXYZ(boundingBoxs[i][3].x, boundingBoxs[i][3].y, boundingBoxs[i][3].z), 1.0, 0.0, 0.0, "line3"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][3].x, boundingBoxs[i][3].y, boundingBoxs[i][3].z), pcl::PointXYZ(boundingBoxs[i][0].x, boundingBoxs[i][0].y, boundingBoxs[i][0].z), 1.0, 0.0, 0.0, "line4"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][4].x, boundingBoxs[i][4].y, boundingBoxs[i][4].z), pcl::PointXYZ(boundingBoxs[i][5].x, boundingBoxs[i][5].y, boundingBoxs[i][5].z), 1.0, 0.0, 0.0, "line5"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][5].x, boundingBoxs[i][5].y, boundingBoxs[i][5].z), pcl::PointXYZ(boundingBoxs[i][6].x, boundingBoxs[i][6].y, boundingBoxs[i][6].z), 1.0, 0.0, 0.0, "line6"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][6].x, boundingBoxs[i][6].y, boundingBoxs[i][6].z), pcl::PointXYZ(boundingBoxs[i][7].x, boundingBoxs[i][7].y, boundingBoxs[i][7].z), 1.0, 0.0, 0.0, "line7"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][7].x, boundingBoxs[i][7].y, boundingBoxs[i][7].z), pcl::PointXYZ(boundingBoxs[i][4].x, boundingBoxs[i][4].y, boundingBoxs[i][4].z), 1.0, 0.0, 0.0, "line8"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][0].x, boundingBoxs[i][0].y, boundingBoxs[i][0].z), pcl::PointXYZ(boundingBoxs[i][4].x, boundingBoxs[i][4].y, boundingBoxs[i][4].z), 1.0, 0.0, 0.0, "linea"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][1].x, boundingBoxs[i][1].y, boundingBoxs[i][1].z), pcl::PointXYZ(boundingBoxs[i][5].x, boundingBoxs[i][5].y, boundingBoxs[i][5].z), 1.0, 0.0, 0.0, "lineb"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][2].x, boundingBoxs[i][2].y, boundingBoxs[i][2].z), pcl::PointXYZ(boundingBoxs[i][6].x, boundingBoxs[i][6].y, boundingBoxs[i][6].z), 1.0, 0.0, 0.0, "linec"+to_string(i));
+        viewer->addLine(pcl::PointXYZ(boundingBoxs[i][3].x, boundingBoxs[i][3].y, boundingBoxs[i][3].z), pcl::PointXYZ(boundingBoxs[i][7].x, boundingBoxs[i][7].y, boundingBoxs[i][7].z), 1.0, 0.0, 0.0, "lined"+to_string(i));
     }
     while (!viewer->wasStopped()) {
-        viewer->spinOnce();
+        viewer->spinOnce(100);
         // boost::this_thread::sleep(boost::posix_time::microseconds(100000));
     }
     return;
 }
-void visualizePointCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
-    pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
-    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> fildColor(cloud, "intensity");
-    viewer->setBackgroundColor(0, 0, 0);
-    viewer->addPointCloud<pcl::PointXYZI>(cloud, fildColor, "sample cloud");
 
+// 可是化标注框内的点云
+void visualizeInnerPoints(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints) {
+    pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+    for (int i = 0; i < innerPoints.size(); i++) {
+        pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> fildColor(innerPoints[i], "z");
+        viewer->setBackgroundColor(0, 0, 0);
+        viewer->addPointCloud<pcl::PointXYZI>(innerPoints[i], fildColor, "sample cloud" + to_string(i));
+    }
     while (!viewer->wasStopped()) {
-        viewer->spinOnce();
+        viewer->spinOnce(100);
         // boost::this_thread::sleep(boost::posix_time::microseconds(100000));
     }
+    return;
 }
+
 
 int main(int argc, char **argv)
 {
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " <bin file>" << endl;
+    if (argc != 3) {
+        cerr << "Usage: " << argv[0] << " <file_index> <visWhat>" << endl;
         exit(EXIT_FAILURE);
     }
     string file_index = argv[1];
+    string visWhat = argv[2];
     string binFile = "/home/newDisk/SUSCape/dataset/lidar/scene-000000/lidar/" + file_index + ".pcd";
     string labelFile = "/home/newDisk/SUSCape/dataset/label/scene-000000/label/" + file_index + ".json";
     string calibFile = "/home/newDisk/SUSCape/dataset/calib/scene-000000/calib/aux_lidar/front.json";
@@ -285,7 +301,16 @@ int main(int argc, char **argv)
     vector<Json::Value> objs = readLabel(labelFile);
     vector<Json::Value> calib = readCalib(calibFile);
 
-    visualizeBoundingBox(cloud, objs, calib);
-    // visualizePointCloud(cloud);
+    // 可视化标注框内的点云
+    vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs);
+    
+    if (visWhat == "bbox") {
+        visualizeWithBbox(cloud, objs, calib);
+    } else if (visWhat == "inner") {
+        visualizeInnerPoints(innerPoints);
+    } else {
+        cout << "Not do visualization" << endl;
+    }
+
     return 0;
 }
