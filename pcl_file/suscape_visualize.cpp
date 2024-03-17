@@ -208,14 +208,16 @@ vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> getInnerPoints(pcl::PointCloud<pcl:
         cropBoxFilter.filter(*innerCloud);
         innerPoints.push_back(innerCloud);
 
-        int count = getAlphaCount(innerCloud);
+        int mesh_count = getAlphaCount(innerCloud);
         float distance = sqrt(x * x + y * y + z * z);
+        float bbox_volume = scale_x * scale_y * scale_z;
+        
         vector<float> temp;
-        // objs[i]["obj_id"]强行转换为float类型
         float idx_ = std::stof(objs[i]["obj_id"].asString());
         temp.push_back(idx_);
         temp.push_back(distance);
-        temp.push_back(count);
+        temp.push_back(mesh_count);
+        temp.push_back(bbox_volume);
         result.push_back(temp);
     }
     return innerPoints;
@@ -288,12 +290,13 @@ float* callsByPython(const char* file_index, const char* visWhat){
     vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> innerPoints = getInnerPoints(cloud, objs, result);
 
     // 将result转换为数组
-    float* result_array = new float[result.size() * 3 + 1];
-    result_array[0] = result.size() * 3;
+    float* result_array = new float[result.size() * 4 + 1];
+    result_array[0] = result.size() * 4;
     for (int i = 0; i < result.size(); i++) {
-        result_array[i * 3 + 1] = result[i][0];
-        result_array[i * 3 + 2] = result[i][1];
-        result_array[i * 3 + 3] = result[i][2];
+        result_array[i * 4 + 1] = result[i][0];
+        result_array[i * 4 + 2] = result[i][1];
+        result_array[i * 4 + 3] = result[i][2];
+        result_array[i * 4 + 4] = result[i][3];
     }
     
     if (string(visWhat) == "bbox") {
@@ -330,7 +333,7 @@ int main(int argc, char *argv[])
 
     // 打印结果
     for (int i = 0; i < result.size(); i++) {
-        cout << "obj_id: " << result[i][0] << " distance: " << result[i][1] << " count: " << result[i][2] << endl;
+        cout << "obj_id: " << result[i][0] << " distance: " << result[i][1] << " count: " << result[i][2] << " bbox_volume: " << result[i][3] << endl;
     }
     
     if (visWhat == "bbox") {
