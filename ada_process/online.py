@@ -1,9 +1,11 @@
 import time
 import numpy as np
+import open3d as o3d
 import util as util
-import math
 import ctypes
 import os
+from multiprocessing import Pool
+from tqdm import tqdm
 
 class OnlineToolKit:
     def __init__(self) -> None:
@@ -24,9 +26,11 @@ class OnlineToolKit:
 
         lib_path = './../pcl_file/build/libsus_vis_lib.so'
         lib = ctypes.CDLL(lib_path)
-        lib.callsByPython.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.callsByPython.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
         lib.callsByPython.restype = ctypes.POINTER(ctypes.c_float)
         self.LIB = lib
+
+        # S3 parameters
 
     def _cal_s1_score(self, pc):
         # 1. make scan and bev desc
@@ -73,8 +77,8 @@ class OnlineToolKit:
         
         return scan_entropy, bev_entropy
     
-    def _cal_s2_score(self, pc_idx):
-        s2_array = self.LIB.lib.callsByPython(str(pc_idx).encode('utf-8'), b'none')
+    def _cal_s2_score(self, root_path , pc_idx):
+        s2_array = self.LIB.callsByPython(str(root_path).encode('utf-8'), str(pc_idx).encode('utf-8'), b'none')
         s2_array = [s2_array[i] for i in range(1,int(s2_array[0])+1)]
         s2_array = [s2_array[i:i+4] for i in range(0, len(s2_array), 4)]
 
@@ -83,11 +87,40 @@ class OnlineToolKit:
         distance = [s2[1] for s2 in s2_array]
         mesh_count = [s2[2] for s2 in s2_array]
         bbox_volume = [s2[3] for s2 in s2_array]
+        distance = np.array(distance)
         l = distance / self.PF_MAX_RANGE
-
         s2_score = (distance**2 * mesh_count / (bbox_volume * np.sqrt(bbox_volume))) / (self.PF_D * (l * np.log(l) + self.PF_H))
         # s2_number = np.sum(s2_score)
         # s2_vector = np.arctan2(np.sum(s2_score * np.cos(degree)), np.sum(s2_score * np.sin(degree)))
         return s2_score
 
-    
+def process_pc(args):
+    root_path, pc_idx = args
+    pc_path = os.path.join(root_path, 'lidar', f"{pc_idx}.pcd")
+    pc = o3d.io.read_point_cloud(pc_path)
+    online_toolkit = OnlineToolKit()
+    s1_score = online_toolkit._cal_s1_score(np.asarray(pc.points))
+    s2_score = online_toolkit._cal_s2_score(root_path, pc_idx)
+    return pc_idx, s1_score, s2_score
+
+if __name__ == "__main__":
+    origin_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
+    for scene_id in os.listdir(origin_path):
+        print(f"Processing scene: {scene_id}")
+        root_path = os.path.join(origin_path, scene_id)
+        pc_path = os.path.join(root_path, 'lidar')
+        # online_toolkit = OnlineToolKit()
+        pc_indices = [pc_idx[:-4] for pc_idx in os.listdir(pc_path) if pc_idx.endswith('.pcd')]
+        args = [(root_path, pc_idx) for pc_idx in pc_indices]
+        total = len(args)
+
+        with Pool() as pool:
+            results = list(tqdm(pool.imap(process_pc, args), total=total, unit='files'))
+
+        # for s1_score, s2_score in results:
+        #     print(f"s1_score: {s1_score}, s2_score: {s2_score}")    
+
+        with open(os.path.join(root_path, 's1s2.txt'), 'w') as f:
+            for pc_idx, s1_score, s2_score in results:
+                f.write(f"{pc_idx} {s1_score[0]} {s1_score[1]} {np.sum(s2_score)}\n")
+
