@@ -6,6 +6,7 @@ import ctypes
 import os
 from multiprocessing import Pool
 from tqdm import tqdm
+import json
 
 class OnlineToolKit:
     def __init__(self) -> None:
@@ -101,7 +102,19 @@ def process_pc(args):
     online_toolkit = OnlineToolKit()
     s1_score = online_toolkit._cal_s1_score(np.asarray(pc.points))
     s2_score = online_toolkit._cal_s2_score(root_path, pc_idx)
-    return pc_idx, s1_score, s2_score
+
+    s1_gt, s1_metric = 0, 60
+    value_types = {'Car', 'Truck', 'Bus', 'Van'}
+    with open(os.path.join(root_path, 'label', f"{pc_idx}.json"), 'r') as f:
+        json_file = json.load(f)
+    objs = json_file['objs']
+    for obj in objs:
+        if obj['obj_type'] in value_types:
+            dist = np.sqrt(obj['psr']['position']['x']**2 + obj['psr']['position']['y']**2 + obj['psr']['position']['z']**2)
+            if dist < s1_metric:
+                s1_gt += 1
+
+    return pc_idx, s1_gt, s1_score, s2_score
 
 if __name__ == "__main__":
     origin_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
@@ -122,6 +135,6 @@ if __name__ == "__main__":
         #     print(f"s1_score: {s1_score}, s2_score: {s2_score}")    
 
         with open(save_path+scene_id+'_online.txt', 'w') as f:
-            for pc_idx, s1_score, s2_score in results:
-                f.write(f"{pc_idx} {s1_score[0]} {s1_score[1]} {np.sum(s2_score)}\n")
+            for pc_idx, s1_gt, s1_score, s2_score in results:
+                f.write(f"{pc_idx} {s1_gt} {s1_score[0]} {s1_score[1]} {np.sum(s2_score)}\n")
 
