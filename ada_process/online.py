@@ -105,6 +105,7 @@ def process_pc(args):
 
 if __name__ == "__main__":
     origin_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
+    save_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
     for scene_id in os.listdir(origin_path):
         print(f"Processing scene: {scene_id}")
         root_path = os.path.join(origin_path, scene_id)
@@ -120,7 +121,7 @@ if __name__ == "__main__":
         # for s1_score, s2_score in results:
         #     print(f"s1_score: {s1_score}, s2_score: {s2_score}")    
 
-        with open(os.path.join(root_path, 's1s2.txt'), 'w') as f:
+        with open(save_path+scene_id+'_online.txt', 'w') as f:
             for pc_idx, s1_score, s2_score in results:
                 f.write(f"{pc_idx} {s1_score[0]} {s1_score[1]} {np.sum(s2_score)}\n")
 
