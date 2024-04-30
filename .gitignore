@@ -2,6 +2,6 @@ dist
 **/__pycache__
 **/*.pyc
 **/*.egg-info
-pcl_file/build
-pcl_file/new_build
+pcl_file/build/
+pcl_file/new_build/
 s1s2_txts/
