@@ -3,3 +3,5 @@ dist
 **/*.pyc
 **/*.egg-info
 pcl_file/build
+pcl_file/new_build
+s1s2_txts/
