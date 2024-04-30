@@ -117,8 +117,8 @@ def process_pc(args):
     return pc_idx, s1_gt, s1_score, s2_score
 
 if __name__ == "__main__":
-    origin_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
-    save_path = '/home/ghosnp/mirror/mmdet_sandbox/home/dataset/'
+    origin_path = '/home/haoq_lab/cse30007451/dataset/online/'
+    save_path = '/home/haoq_lab/cse30007451/dataset/ada_txts/'
     for scene_id in os.listdir(origin_path):
         print(f"Processing scene: {scene_id}")
         root_path = os.path.join(origin_path, scene_id)

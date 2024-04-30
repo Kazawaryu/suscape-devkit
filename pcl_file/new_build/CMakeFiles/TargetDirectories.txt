@@ -1,4 +1,0 @@
-/home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file/new_build/CMakeFiles/rebuild_cache.dir
-/home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file/new_build/CMakeFiles/edit_cache.dir
-/home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file/new_build/CMakeFiles/sus_vis_lib.dir
-/home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file/new_build/CMakeFiles/sus_vis.dir

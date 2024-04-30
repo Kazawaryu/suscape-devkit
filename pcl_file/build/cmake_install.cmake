@@ -1,4 +1,4 @@
-# Install script for directory: /home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file
+# Install script for directory: /home/haoq_lab/cse30007451/dataset/suscape-devkit/pcl_file
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/ghosnp/mirror/mmdet_sandbox/home/suscape-devkit/pcl_file/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/haoq_lab/cse30007451/dataset/suscape-devkit/pcl_file/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
